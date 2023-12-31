@@ -5,6 +5,8 @@
 // https://chip-8.github.io/links/
 // https://tobiasvl.github.io/blog/write-a-chip-8-emulator/
 
+use rand::Rng;
+
 const FONTSET: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
     0x20, 0x60, 0x20, 0x20, 0x70, // 1
@@ -49,6 +51,7 @@ struct Chip8 {
     delay_timer: u8,
 
     sound_timer: u8,
+    rng: rand::rngs::ThreadRng,
 }
 impl Chip8 {
     fn new() -> Self {
@@ -62,6 +65,7 @@ impl Chip8 {
             gpu: Gpu::new(),
             delay_timer: 0,
             sound_timer: 0,
+            rng: rand::thread_rng(),
         };
         c8.mem[..FONTSET.len()].copy_from_slice(&FONTSET); // Copy font into memory.
 
@@ -192,7 +196,15 @@ impl Chip8 {
                 self.v[x as usize] >>= 1;
                 self.v[0xF] = lsb;
             }
-            OpCode::SubN(_, _) => todo!(),
+            OpCode::SubN(x, y) => {
+                let x = x as usize;
+                let y = y as usize;
+
+                let (new_x, carry) = self.v[y].overflowing_sub(self.v[x]);
+
+                self.v[x] = new_x;
+                self.v[0xF] = carry as _;
+            }
             OpCode::Shl(x) => {
                 // If the most-significant bit of Vx is 1, then VF is set to 1, otherwise to 0.
                 // Then Vx is multiplied by 2.
@@ -207,7 +219,7 @@ impl Chip8 {
             }
             OpCode::LdI(value) => self.idx = value as _,
             OpCode::JpV0(_) => todo!(),
-            OpCode::Rnd(_, _) => todo!(),
+            OpCode::Rnd(x, value) => self.v[x as usize] = self.rng.gen::<u8>() & value,
             OpCode::Drw(vx, vy, n) => self.draw(vx, vy, n),
             OpCode::Skp(_) => todo!(),
             OpCode::SkNp(_) => todo!(),
@@ -327,7 +339,7 @@ enum OpCode {
     SeNeVxVy(u8, u8), // 9xy0 - SNE Vx, Vy
     LdI(u16),         // Annn - LD I, addr
     JpV0(u8),         // Bnnn - JP V0, addr
-    Rnd(u8, u16),     // Cxkk - RND Vx, value
+    Rnd(u8, u8),      // Cxkk - RND Vx, value
     Drw(u8, u8, u8),  // Dxyn - DRW Vx, Vy, nibble
     Skp(u8),          // Ex9E - SKP Vx
     SkNp(u8),         // ExA1 - SKNP Vx
@@ -408,7 +420,7 @@ impl OpCode {
             0xB000 => Self::JpV0((opcode & 0x0FFF) as u8),
             0xC000 => {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
-                let value = opcode & 0x00FF;
+                let value = (opcode & 0x00FF) as u8;
                 Self::Rnd(vx, value)
             }
             0xD000 => {
@@ -452,6 +464,7 @@ fn main() {
     // set up input Bevy? Think about wasm
     // set up graphics Bevy?
     let mut c8 = Chip8::new();
-    c8.load("./test_opcode.ch8");
+    //c8.load("./test_opcode.ch8");
+    c8.load("./br8kout.ch8");
     c8.run();
 }
