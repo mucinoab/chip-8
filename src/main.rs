@@ -3,13 +3,33 @@
 // https://aymanbagabas.com/blog/2018/09/17/chip-8-emulator.html
 // https://github.com/mattmikolay/chip-8/wiki/Mastering-CHIP%E2%80%908
 // https://chip-8.github.io/links/
+// https://tobiasvl.github.io/blog/write-a-chip-8-emulator/
+
+const FONTSET: [u8; 80] = [
+    0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
+    0x20, 0x60, 0x20, 0x20, 0x70, // 1
+    0xF0, 0x10, 0xF0, 0x80, 0xF0, // 2
+    0xF0, 0x10, 0xF0, 0x10, 0xF0, // 3
+    0x90, 0x90, 0xF0, 0x10, 0x10, // 4
+    0xF0, 0x80, 0xF0, 0x10, 0xF0, // 5
+    0xF0, 0x80, 0xF0, 0x90, 0xF0, // 6
+    0xF0, 0x10, 0x20, 0x40, 0x40, // 7
+    0xF0, 0x90, 0xF0, 0x90, 0xF0, // 8
+    0xF0, 0x90, 0xF0, 0x10, 0xF0, // 9
+    0xF0, 0x90, 0xF0, 0x90, 0x90, // A
+    0xE0, 0x90, 0xE0, 0x90, 0xE0, // B
+    0xF0, 0x80, 0x80, 0x80, 0xF0, // C
+    0xE0, 0x90, 0x90, 0x90, 0xE0, // D
+    0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
+    0xF0, 0x80, 0xF0, 0x80, 0x80, // F
+];
 
 struct Chip8 {
     /// Index
     idx: usize,
 
     /// Program Counter
-    pc: usize,
+    pc: u16,
 
     /// Stack Pointer
     sp: usize,
@@ -18,41 +38,46 @@ struct Chip8 {
     /// Registers
     v: [u8; 16],
 
-    mem: Memory,
+    /// Ram Memory
+    /// 0x000-0x1FF - Chip 8 interpreter (contains font set in emu)
+    /// 0x050-0x0A0 - Used for the built in 4x5 pixel font set (0-F)
+    /// 0x200-0xFFF - Program ROM and work RAM
+    mem: [u8; 4096],
+
     gpu: Gpu,
 
     delay_timer: u8,
+
     sound_timer: u8,
 }
 impl Chip8 {
     fn new() -> Self {
-        Self {
+        let mut c8 = Self {
             idx: 0,
             pc: 0x200,
             sp: 0,
             stack: [0; 16],
             v: [0; 16],
-            mem: Memory::new(),
-            gpu: Gpu {},
+            mem: [0; 4096],
+            gpu: Gpu::new(),
             delay_timer: 0,
             sound_timer: 0,
-        }
+        };
+        c8.mem[..FONTSET.len()].copy_from_slice(&FONTSET); // Copy font into memory.
+
+        c8
     }
 
     fn load(&mut self, game_path: &str) {
-        let s = std::fs::read(game_path).unwrap();
+        let s = std::fs::read(game_path).expect("Unable to find given game");
 
         for (idx, &op) in s.iter().enumerate() {
-            self.mem.mem[idx + 0x200] = op;
+            self.mem[idx + 0x200] = op;
         }
     }
 
     fn run(&mut self) {
         loop {
-            if self.pc == 4096 {
-                break;
-            }
-
             self.cycle();
 
             if true {
@@ -65,12 +90,14 @@ impl Chip8 {
 
     fn cycle(&mut self) {
         // Fetch Opcode
-        let op_a = self.mem.mem[self.pc];
-        let op_b = self.mem.mem[self.pc + 1];
+        let op_a = self.mem[self.pc as usize];
+        let op_b = self.mem[self.pc as usize + 1];
 
         // Decode Opcode
         let op = OpCode::decode(op_a, op_b);
+        self.pc += 2;
 
+        eprintln!("{:?}, pc: {}", op, self.pc);
         // Execute Opcode
         self.execute(op);
 
@@ -82,20 +109,42 @@ impl Chip8 {
         }
 
         self.sound_timer = self.sound_timer.saturating_sub(1);
+        // std::io::stdin().read_line(&mut String::new());
     }
 
-    fn draw_graphics(&mut self) {}
+    fn draw_graphics(&self) {
+        let mut screen = String::new();
 
+        for x in 0..SCREEN_HEIGHT {
+            for y in 0..SCREEN_WIDTH {
+                let coor = x + y;
+                if self.gpu.screen[coor] {
+                    screen.push('#');
+                } else {
+                    screen.push(' ');
+                }
+            }
+            screen.push('\n');
+        }
+
+        eprintln!("{}", screen);
+        // std::io::stdin().read_line(&mut String::new());
+    }
+
+    /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.1
     fn execute(&mut self, op: OpCode) {
         match op {
-            OpCode::Cls => todo!(),
-            OpCode::Ret => todo!(),
-            OpCode::Jp(_) => todo!(),
+            OpCode::Cls => self.gpu.clear(),
+            OpCode::Ret => {
+                self.pc = self.stack[self.sp] as u16;
+                self.sp = self.sp.saturating_sub(1);
+            }
+            OpCode::Jp(addr) => self.pc = addr as _,
             OpCode::Call(_) => todo!(),
             OpCode::SeVx(_, _) => todo!(),
             OpCode::SNeVx(_, _) => todo!(),
             OpCode::SeVxVy(_, _) => todo!(),
-            OpCode::LdVx(_, _) => todo!(),
+            OpCode::LdVx(idx, value) => self.v[idx as usize] = value as _,
             OpCode::AddVx(_, _) => todo!(),
             OpCode::LdVxVy(_, _) => todo!(),
             OpCode::Or(_, _) => todo!(),
@@ -107,10 +156,10 @@ impl Chip8 {
             OpCode::SubN(_, _) => todo!(),
             OpCode::Shl(_) => todo!(),
             OpCode::SeNeVxVy(_, _) => todo!(),
-            OpCode::LdI(_) => todo!(),
+            OpCode::LdI(byte) => self.idx = byte as _,
             OpCode::JpV0(_) => todo!(),
             OpCode::Rnd(_, _) => todo!(),
-            OpCode::Drw(_, _, _) => todo!(),
+            OpCode::Drw(vx, vy, n) => self.draw(vx, vy, n),
             OpCode::Skp(_) => todo!(),
             OpCode::SkNp(_) => todo!(),
             OpCode::LdVxDt(_) => todo!(),
@@ -125,34 +174,74 @@ impl Chip8 {
             OpCode::Nop => todo!(),
         }
     }
-}
 
-struct Memory {
-    // 0x000-0x1FF - Chip 8 interpreter (contains font set in emu)
-    // 0x050-0x0A0 - Used for the built in 4x5 pixel font set (0-F)
-    // 0x200-0xFFF - Program ROM and work RAM
-    mem: [u8; 4096],
-}
+    fn draw(&mut self, vx: u8, vy: u8, n: u8) {
+        // The interpreter reads n bytes from memory, starting at the address stored in I. These
+        // bytes are then displayed as sprites on screen at coordinates (Vx, Vy). Sprites are XORed
+        // onto the existing screen. If this causes any pixels to be erased, VF is set to 1,
+        // otherwise it is set to 0. If the sprite is positioned so part of it is outside the
+        // coordinates of the display, it wraps around to the opposite side of the screen. See
+        // instruction 8xy3 for more information on XOR, and section 2.4, Display, for more
+        // information on the Chip-8 screen and sprites.
 
-impl Memory {
-    fn new() -> Self {
-        Self { mem: [0; 4096] }
+        let x_base = self.v[vx as usize] as usize;
+        let y_base = self.v[vy as usize] as usize;
+        let n = n as usize;
+
+        let mut collision = false;
+        let pixels = &self.mem[self.idx..self.idx + n];
+
+        for (y_line, &pixel) in pixels.iter().enumerate() {
+            for x_line in 0..8 {
+                if (pixel & (0b1000_0000 >> x_line)) != 0 {
+                    let x = (x_base + x_line) % SCREEN_WIDTH;
+                    let y = (y_base + y_line) % SCREEN_HEIGHT;
+
+                    let current_pixel = &mut self.gpu.screen[x + SCREEN_WIDTH * y];
+
+                    if *current_pixel {
+                        collision = true;
+                    }
+
+                    *current_pixel ^= true;
+                }
+            }
+        }
+
+        self.v[0xF] = collision as _;
     }
 }
 
-struct Gpu {}
+pub const SCREEN_WIDTH: usize = 64;
+pub const SCREEN_HEIGHT: usize = 32;
+
+struct Gpu {
+    screen: [bool; SCREEN_WIDTH * SCREEN_HEIGHT],
+}
+
+impl Gpu {
+    fn clear(&mut self) {
+        self.screen.fill(false);
+    }
+
+    fn new() -> Self {
+        Self {
+            screen: [false; SCREEN_WIDTH * SCREEN_HEIGHT],
+        }
+    }
+}
 
 /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 enum OpCode {
     Cls,              // 00E0 - CLS
     Ret,              // 00EE - RET
-    Jp(u8),           // 1nnn - JP addr
+    Jp(usize),        // 1nnn - JP addr
     Call(u8),         // 2nnn - CALL addr
     SeVx(u8, u8),     // 3xkk - SE Vx, byte
     SNeVx(u8, u8),    // 4xkk - SNE Vx, byte
     SeVxVy(u8, u8),   // 5xy0 - SE Vx, Vy
-    LdVx(u8, u8),     // 6xkk - LD Vx, byte
+    LdVx(u8, u16),    // 6xkk - LD Vx, byte
     AddVx(u8, u8),    // 7xkk - ADD Vx, byte
     LdVxVy(u8, u8),   // 8xy0 - LD Vx, Vy
     Or(u8, u8),       // 8xy1 - OR Vx, Vy
@@ -164,7 +253,7 @@ enum OpCode {
     SubN(u8, u8),     // 8xy7 - SUBN Vx, Vy
     Shl(u8),          // 8xyE - SHL Vx {, Vy}
     SeNeVxVy(u8, u8), // 9xy0 - SNE Vx, Vy
-    LdI(u8),          // Annn - LD I, addr
+    LdI(u16),         // Annn - LD I, addr
     JpV0(u8),         // Bnnn - JP V0, addr
     Rnd(u8, u8),      // Cxkk - RND Vx, byte
     Drw(u8, u8, u8),  // Dxyn - DRW Vx, Vy, nibble
@@ -186,6 +275,7 @@ enum OpCode {
 impl OpCode {
     fn decode(raw_a: u8, raw_b: u8) -> Self {
         let opcode: u16 = (raw_a as u16) << 8 | (raw_b as u16);
+        eprint!("{:#8x} ", opcode);
 
         match opcode & 0xF000 {
             0x0000 => match opcode & 0x000F {
@@ -193,36 +283,36 @@ impl OpCode {
                 0x000E => Self::Ret,
                 _ => unreachable!("Invalid Op {:#x}", opcode),
             },
-            0x1000 => Self::Jp((opcode & 0x0FFF) as u8),
+            0x1000 => Self::Jp((opcode & 0x0FFF) as _),
             0x2000 => Self::Call((opcode & 0x0FFF) as u8),
             0x3000 => {
-                let vx = (opcode & 0x0F00) as u8;
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
                 let byte = (opcode & 0x00FF) as u8;
                 Self::SeVx(vx, byte)
             }
             0x4000 => {
-                let vx = (opcode & 0x0F00) as u8;
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
                 let byte = (opcode & 0x00FF) as u8;
                 Self::SNeVx(vx, byte)
             }
             0x5000 => {
-                let vx = (opcode & 0x0F00) as u8;
-                let vy = (opcode & 0x00F0) as u8;
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
+                let vy = ((opcode & 0x00F0) >> 4) as u8;
                 Self::SeVxVy(vx, vy)
             }
             0x6000 => {
-                let vx = (opcode & 0x0F00) as u8;
-                let byte = (opcode & 0x00FF) as u8;
-                Self::LdVx(vx, byte)
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
+                let value = opcode & 0x00FF;
+                Self::LdVx(vx, value)
             }
             0x7000 => {
-                let vx = (opcode & 0x0F00) as u8;
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
                 let byte = (opcode & 0x00FF) as u8;
                 Self::AddVx(vx, byte)
             }
             0x8000 => {
-                let vx = (opcode & 0x0F00) as u8;
-                let vy = (opcode & 0x00F0) as u8;
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
+                let vy = ((opcode & 0x00F0) >> 4) as u8;
 
                 match opcode & 0x000F {
                     0x0000 => Self::LdVxVy(vx, vy),
@@ -238,25 +328,25 @@ impl OpCode {
                 }
             }
             0x9000 => {
-                let vx = (opcode & 0x0F00) as u8;
-                let vy = (opcode & 0x00F0) as u8;
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
+                let vy = ((opcode & 0x00F0) >> 4) as u8;
                 Self::SeNeVxVy(vx, vy)
             }
-            0xA000 => Self::LdI((opcode & 0x0FFF) as u8),
+            0xA000 => Self::LdI(opcode & 0x0FFF),
             0xB000 => Self::JpV0((opcode & 0x0FFF) as u8),
             0xC000 => {
-                let vx = (opcode & 0x0F00) as u8;
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
                 let byte = (opcode & 0x00FF) as u8;
                 Self::Rnd(vx, byte)
             }
             0xD000 => {
-                let vx = (opcode & 0x0F00) as u8;
-                let vy = (opcode & 0x00F0) as u8;
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
+                let vy = ((opcode & 0x00F0) >> 4) as u8;
                 let n = (opcode & 0x000F) as u8;
                 Self::Drw(vx, vy, n)
             }
             0xE000 => {
-                let vx = (opcode & 0x0F00) as u8;
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
                 match opcode & 0x00FF {
                     0x009E => Self::Skp(vx),
                     0x00A1 => Self::SkNp(vx),
@@ -267,7 +357,7 @@ impl OpCode {
                 }
             }
             0xF000 => {
-                let vx = (opcode & 0x0F00) as u8;
+                let vx = ((opcode & 0x0F00) >> 8) as u8;
                 match opcode & 0x00FF {
                     0x0007 => Self::LdVxDt(vx),
                     0x000A => Self::LdVxK,
