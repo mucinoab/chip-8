@@ -33,7 +33,7 @@ struct Chip8 {
 
     /// Stack Pointer
     sp: usize,
-    stack: [usize; 16],
+    stack: [u16; 16],
 
     /// Registers
     v: [u8; 16],
@@ -136,11 +136,15 @@ impl Chip8 {
         match op {
             OpCode::Cls => self.gpu.clear(),
             OpCode::Ret => {
-                self.pc = self.stack[self.sp] as u16;
                 self.sp = self.sp.saturating_sub(1);
+                self.pc = self.stack[self.sp];
             }
             OpCode::Jp(addr) => self.pc = addr as _,
-            OpCode::Call(_) => todo!(),
+            OpCode::Call(addr) => {
+                self.stack[self.sp] = self.pc;
+                self.sp += 1;
+                self.pc = addr;
+            }
             OpCode::SeVx(reg_idx, value) => {
                 if self.v[reg_idx as usize] == value as u8 {
                     self.pc += 2;
@@ -263,8 +267,8 @@ impl Gpu {
 enum OpCode {
     Cls,              // 00E0 - CLS
     Ret,              // 00EE - RET
-    Jp(usize),        // 1nnn - JP addr
-    Call(u8),         // 2nnn - CALL addr
+    Jp(u16),          // 1nnn - JP addr
+    Call(u16),        // 2nnn - CALL addr
     SeVx(u8, u16),    // 3xkk - SE Vx, value
     SNeVx(u8, u16),   // 4xkk - SNE Vx, value
     SeVxVy(u8, u8),   // 5xy0 - SE Vx, Vy
@@ -310,8 +314,8 @@ impl OpCode {
                 0x000E => Self::Ret,
                 _ => unreachable!("Invalid Op {:#x}", opcode),
             },
-            0x1000 => Self::Jp((opcode & 0x0FFF) as _),
-            0x2000 => Self::Call((opcode & 0x0FFF) as u8),
+            0x1000 => Self::Jp(opcode & 0x0FFF),
+            0x2000 => Self::Call(opcode & 0x0FFF),
             0x3000 => {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
                 let value = opcode & 0x00FF;
