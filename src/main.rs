@@ -157,12 +157,23 @@ impl Chip8 {
                 }
             }
             OpCode::LdVx(reg_idx, value) => self.v[reg_idx as usize] = value as _,
-            OpCode::AddVx(_, _) => todo!(),
+            OpCode::AddVx(x, v) => {
+                let vx = &mut self.v[x as usize];
+                *vx = vx.wrapping_add(v as u8)
+            }
             OpCode::LdVxVy(_, _) => todo!(),
             OpCode::Or(_, _) => todo!(),
             OpCode::And(_, _) => todo!(),
             OpCode::Xor(_, _) => todo!(),
-            OpCode::Add(_, _) => todo!(),
+            OpCode::Add(x, y) => {
+                let x = x as usize;
+                let y = y as usize;
+
+                let (new_x, carry) = self.v[x].overflowing_add(self.v[y]);
+
+                self.v[x] = new_x;
+                self.v[0xF] = carry as _;
+            }
             OpCode::Sub(_, _) => todo!(),
             OpCode::Shr(_) => todo!(),
             OpCode::SubN(_, _) => todo!(),
@@ -182,7 +193,7 @@ impl Chip8 {
             OpCode::LdVxK => todo!(),
             OpCode::LdDtVx(_) => todo!(),
             OpCode::LdStVx(_) => todo!(),
-            OpCode::AddIVx(_) => todo!(),
+            OpCode::AddIVx(x) => self.idx += self.v[x as usize] as usize,
             OpCode::LdFVx(_) => todo!(),
             OpCode::LdBVx(_) => todo!(),
             OpCode::LdIVx(_) => todo!(),
