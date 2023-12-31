@@ -141,10 +141,14 @@ impl Chip8 {
             }
             OpCode::Jp(addr) => self.pc = addr as _,
             OpCode::Call(_) => todo!(),
-            OpCode::SeVx(_, _) => todo!(),
+            OpCode::SeVx(reg_idx, value) => {
+                if self.v[reg_idx as usize] == value as u8 {
+                    self.pc += 2;
+                }
+            }
             OpCode::SNeVx(_, _) => todo!(),
             OpCode::SeVxVy(_, _) => todo!(),
-            OpCode::LdVx(idx, value) => self.v[idx as usize] = value as _,
+            OpCode::LdVx(reg_idx, value) => self.v[reg_idx as usize] = value as _,
             OpCode::AddVx(_, _) => todo!(),
             OpCode::LdVxVy(_, _) => todo!(),
             OpCode::Or(_, _) => todo!(),
