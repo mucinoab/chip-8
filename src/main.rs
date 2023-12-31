@@ -165,23 +165,41 @@ impl Chip8 {
                 let vx = &mut self.v[x as usize];
                 *vx = vx.wrapping_add(v as u8)
             }
-            OpCode::LdVxVy(_, _) => todo!(),
-            OpCode::Or(_, _) => todo!(),
-            OpCode::And(_, _) => todo!(),
-            OpCode::Xor(_, _) => todo!(),
+            OpCode::LdVxVy(x, y) => self.v[x as usize] = self.v[y as usize],
+            OpCode::Or(x, y) => self.v[x as usize] |= self.v[y as usize],
+            OpCode::And(x, y) => self.v[x as usize] &= self.v[y as usize],
+            OpCode::Xor(x, y) => self.v[x as usize] ^= self.v[y as usize],
             OpCode::Add(x, y) => {
                 let x = x as usize;
                 let y = y as usize;
 
-                let (new_x, carry) = self.v[x].overflowing_add(self.v[y]);
+                let (new_x, borrow) = self.v[x].overflowing_add(self.v[y]);
+
+                self.v[x] = new_x;
+                self.v[0xF] = borrow as _;
+            }
+            OpCode::Sub(x, y) => {
+                let x = x as usize;
+                let y = y as usize;
+
+                let (new_x, carry) = self.v[x].overflowing_sub(self.v[y]);
 
                 self.v[x] = new_x;
                 self.v[0xF] = carry as _;
             }
-            OpCode::Sub(_, _) => todo!(),
-            OpCode::Shr(_) => todo!(),
+            OpCode::Shr(x) => {
+                let lsb = self.v[x as usize] & 1;
+                self.v[x as usize] >>= 1;
+                self.v[0xF] = lsb;
+            }
             OpCode::SubN(_, _) => todo!(),
-            OpCode::Shl(_) => todo!(),
+            OpCode::Shl(x) => {
+                // If the most-significant bit of Vx is 1, then VF is set to 1, otherwise to 0.
+                // Then Vx is multiplied by 2.
+                let msb = (self.v[x as usize] >> 7) & 1;
+                self.v[x as usize] <<= 1;
+                self.v[0xF] = msb;
+            }
             OpCode::SeNeVxVy(x, y) => {
                 if self.v[x as usize] != self.v[y as usize] {
                     self.pc += 2;
@@ -199,9 +217,32 @@ impl Chip8 {
             OpCode::LdStVx(_) => todo!(),
             OpCode::AddIVx(x) => self.idx += self.v[x as usize] as usize,
             OpCode::LdFVx(_) => todo!(),
-            OpCode::LdBVx(_) => todo!(),
-            OpCode::LdIVx(_) => todo!(),
-            OpCode::LdVxI(_) => todo!(),
+            OpCode::LdBVx(x) => {
+                // BCD, takes the decimal value of Vx, and places the hundreds digit in memory at
+                // location in I, the tens digit at location I+1, and the ones digit at location
+                // I+2.
+                let mut vx = self.v[x as usize];
+
+                self.mem[self.idx + 2] = vx % 10;
+                vx /= 10;
+
+                self.mem[self.idx + 1] = vx % 10;
+                vx /= 10;
+
+                debug_assert!(vx < 10);
+                self.mem[self.idx] = vx;
+            }
+
+            OpCode::LdIVx(n) => {
+                let n = n as usize;
+                let registers = &self.v[..n];
+                self.mem[self.idx..self.idx + n].copy_from_slice(registers);
+            }
+            OpCode::LdVxI(n) => {
+                let n = n as usize;
+                let memory = &self.mem[self.idx..self.idx + n];
+                self.v[..n].copy_from_slice(memory);
+            }
             OpCode::Nop => todo!(),
         }
     }
