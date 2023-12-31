@@ -146,8 +146,16 @@ impl Chip8 {
                     self.pc += 2;
                 }
             }
-            OpCode::SNeVx(_, _) => todo!(),
-            OpCode::SeVxVy(_, _) => todo!(),
+            OpCode::SNeVx(reg_idx, value) => {
+                if self.v[reg_idx as usize] != value as u8 {
+                    self.pc += 2;
+                }
+            }
+            OpCode::SeVxVy(x, y) => {
+                if self.v[x as usize] == self.v[y as usize] {
+                    self.pc += 2;
+                }
+            }
             OpCode::LdVx(reg_idx, value) => self.v[reg_idx as usize] = value as _,
             OpCode::AddVx(_, _) => todo!(),
             OpCode::LdVxVy(_, _) => todo!(),
@@ -159,7 +167,11 @@ impl Chip8 {
             OpCode::Shr(_) => todo!(),
             OpCode::SubN(_, _) => todo!(),
             OpCode::Shl(_) => todo!(),
-            OpCode::SeNeVxVy(_, _) => todo!(),
+            OpCode::SeNeVxVy(x, y) => {
+                if self.v[x as usize] != self.v[y as usize] {
+                    self.pc += 2;
+                }
+            }
             OpCode::LdI(value) => self.idx = value as _,
             OpCode::JpV0(_) => todo!(),
             OpCode::Rnd(_, _) => todo!(),
