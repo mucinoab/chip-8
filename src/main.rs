@@ -156,7 +156,7 @@ impl Chip8 {
             OpCode::SubN(_, _) => todo!(),
             OpCode::Shl(_) => todo!(),
             OpCode::SeNeVxVy(_, _) => todo!(),
-            OpCode::LdI(byte) => self.idx = byte as _,
+            OpCode::LdI(value) => self.idx = value as _,
             OpCode::JpV0(_) => todo!(),
             OpCode::Rnd(_, _) => todo!(),
             OpCode::Drw(vx, vy, n) => self.draw(vx, vy, n),
@@ -238,11 +238,11 @@ enum OpCode {
     Ret,              // 00EE - RET
     Jp(usize),        // 1nnn - JP addr
     Call(u8),         // 2nnn - CALL addr
-    SeVx(u8, u8),     // 3xkk - SE Vx, byte
-    SNeVx(u8, u8),    // 4xkk - SNE Vx, byte
+    SeVx(u8, u16),    // 3xkk - SE Vx, value
+    SNeVx(u8, u16),   // 4xkk - SNE Vx, value
     SeVxVy(u8, u8),   // 5xy0 - SE Vx, Vy
-    LdVx(u8, u16),    // 6xkk - LD Vx, byte
-    AddVx(u8, u8),    // 7xkk - ADD Vx, byte
+    LdVx(u8, u16),    // 6xkk - LD Vx, value
+    AddVx(u8, u16),   // 7xkk - ADD Vx, value
     LdVxVy(u8, u8),   // 8xy0 - LD Vx, Vy
     Or(u8, u8),       // 8xy1 - OR Vx, Vy
     And(u8, u8),      // 8xy2 - AND Vx, Vy
@@ -255,7 +255,7 @@ enum OpCode {
     SeNeVxVy(u8, u8), // 9xy0 - SNE Vx, Vy
     LdI(u16),         // Annn - LD I, addr
     JpV0(u8),         // Bnnn - JP V0, addr
-    Rnd(u8, u8),      // Cxkk - RND Vx, byte
+    Rnd(u8, u16),     // Cxkk - RND Vx, value
     Drw(u8, u8, u8),  // Dxyn - DRW Vx, Vy, nibble
     Skp(u8),          // Ex9E - SKP Vx
     SkNp(u8),         // ExA1 - SKNP Vx
@@ -287,13 +287,13 @@ impl OpCode {
             0x2000 => Self::Call((opcode & 0x0FFF) as u8),
             0x3000 => {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
-                let byte = (opcode & 0x00FF) as u8;
-                Self::SeVx(vx, byte)
+                let value = opcode & 0x00FF;
+                Self::SeVx(vx, value)
             }
             0x4000 => {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
-                let byte = (opcode & 0x00FF) as u8;
-                Self::SNeVx(vx, byte)
+                let value = opcode & 0x00FF;
+                Self::SNeVx(vx, value)
             }
             0x5000 => {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
@@ -307,8 +307,8 @@ impl OpCode {
             }
             0x7000 => {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
-                let byte = (opcode & 0x00FF) as u8;
-                Self::AddVx(vx, byte)
+                let value = opcode & 0x00FF;
+                Self::AddVx(vx, value)
             }
             0x8000 => {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
@@ -336,8 +336,8 @@ impl OpCode {
             0xB000 => Self::JpV0((opcode & 0x0FFF) as u8),
             0xC000 => {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
-                let byte = (opcode & 0x00FF) as u8;
-                Self::Rnd(vx, byte)
+                let value = opcode & 0x00FF;
+                Self::Rnd(vx, value)
             }
             0xD000 => {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
