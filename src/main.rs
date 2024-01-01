@@ -25,7 +25,6 @@ const FONTSET: [u8; 80] = [
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
-
 struct Chip8 {
     /// Index
     idx: usize,
@@ -49,10 +48,22 @@ struct Chip8 {
     gpu: Gpu,
 
     delay_timer: u8,
-
     sound_timer: u8,
     rng: rand::rngs::ThreadRng,
+
+    /// Keypad                   Keyboard
+    /// +-+-+-+-+                +-+-+-+-+
+    /// |1|2|3|C|                |1|2|3|4|
+    /// +-+-+-+-+                +-+-+-+-+
+    /// |4|5|6|D|                |Q|W|E|R|
+    /// +-+-+-+-+       =>       +-+-+-+-+
+    /// |7|8|9|E|                |A|S|D|F|
+    /// +-+-+-+-+                +-+-+-+-+
+    /// |A|0|B|F|                |Z|X|C|V|
+    /// +-+-+-+-+                +-+-+-+-+
+    keypad: [bool; 16],
 }
+
 impl Chip8 {
     fn new() -> Self {
         let mut c8 = Self {
@@ -66,6 +77,7 @@ impl Chip8 {
             delay_timer: 0,
             sound_timer: 0,
             rng: rand::thread_rng(),
+            keypad: [false; 16],
         };
         c8.mem[..FONTSET.len()].copy_from_slice(&FONTSET); // Copy font into memory.
 
@@ -131,7 +143,7 @@ impl Chip8 {
             screen.push('\n');
         }
 
-        eprintln!("{}", screen);
+        // eprintln!("{}", screen);
         // std::io::stdin().read_line(&mut String::new());
     }
 
@@ -220,9 +232,18 @@ impl Chip8 {
             OpCode::LdI(value) => self.idx = value as _,
             OpCode::JpV0(_) => todo!(),
             OpCode::Rnd(x, value) => self.v[x as usize] = self.rng.gen::<u8>() & value,
-            OpCode::Drw(vx, vy, n) => self.draw(vx, vy, n),
-            OpCode::Skp(_) => todo!(),
-            OpCode::SkNp(_) => todo!(),
+            OpCode::Drw(x, vy, n) => self.draw(x, vy, n),
+            OpCode::Skp(x) => {
+                if self.keypad[self.v[x as usize] as usize] {
+                    self.pc += 2;
+                }
+            }
+            OpCode::SkNp(x) => {
+                if !self.keypad[self.v[x as usize] as usize] {
+                    self.pc += 2;
+                }
+            }
+
             OpCode::LdVxDt(_) => todo!(),
             OpCode::LdVxK => todo!(),
             OpCode::LdDtVx(_) => todo!(),
