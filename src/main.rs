@@ -1,12 +1,8 @@
-// Chip-8 Technical Reference
-// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#00E0
-// https://aymanbagabas.com/blog/2018/09/17/chip-8-emulator.html
-// https://github.com/mattmikolay/chip-8/wiki/Mastering-CHIP%E2%80%908
-// https://chip-8.github.io/links/
-// https://tobiasvl.github.io/blog/write-a-chip-8-emulator/
-
 use rand::Rng;
 
+const TICKS_PER_FRAME: usize = 10;
+const SCREEN_WIDTH: usize = 64;
+const SCREEN_HEIGHT: usize = 32;
 const FONTSET: [u8; 80] = [
     0xF0, 0x90, 0x90, 0x90, 0xF0, // 0
     0x20, 0x60, 0x20, 0x20, 0x70, // 1
@@ -37,31 +33,29 @@ struct Chip8 {
     sp: usize,
     stack: [u16; 16],
 
-    /// Registers
+    /// Registers 0x0 - 0xF
     v: [u8; 16],
 
-    /// Ram Memory
-    /// 0x000-0x1FF - Chip 8 interpreter (contains font set in emu)
-    /// 0x050-0x0A0 - Used for the built in 4x5 pixel font set (0-F)
     /// 0x200-0xFFF - Program ROM and work RAM
     mem: [u8; 4096],
 
-    gpu: Gpu,
+    /// Monochromatic screen
+    screen: [bool; SCREEN_WIDTH * SCREEN_HEIGHT],
 
     delay_timer: u8,
     sound_timer: u8,
     rng: rand::rngs::ThreadRng,
 
-    /// Keypad                   Keyboard
-    /// +-+-+-+-+                +-+-+-+-+
-    /// |1|2|3|C|                |1|2|3|4|
-    /// +-+-+-+-+                +-+-+-+-+
-    /// |4|5|6|D|                |Q|W|E|R|
-    /// +-+-+-+-+       =>       +-+-+-+-+
-    /// |7|8|9|E|                |A|S|D|F|
-    /// +-+-+-+-+                +-+-+-+-+
-    /// |A|0|B|F|                |Z|X|C|V|
-    /// +-+-+-+-+                +-+-+-+-+
+    /// Keypad             Keyboard
+    /// +-+-+-+-+          +-+-+-+-+
+    /// |1|2|3|C|          |1|2|3|4|
+    /// +-+-+-+-+          +-+-+-+-+
+    /// |4|5|6|D|          |Q|W|E|R|
+    /// +-+-+-+-+    =>    +-+-+-+-+
+    /// |7|8|9|E|          |A|S|D|F|
+    /// +-+-+-+-+          +-+-+-+-+
+    /// |A|0|B|F|          |Z|X|C|V|
+    /// +-+-+-+-+          +-+-+-+-+
     keypad: [bool; 16],
 }
 
@@ -74,7 +68,7 @@ impl Chip8 {
             stack: [0; 16],
             v: [0; 16],
             mem: [0; 4096],
-            gpu: Gpu::new(),
+            screen: [false; SCREEN_WIDTH * SCREEN_HEIGHT],
             delay_timer: 0,
             sound_timer: 0,
             rng: rand::thread_rng(),
@@ -111,6 +105,7 @@ impl Chip8 {
         self.delay_timer = self.delay_timer.saturating_sub(1);
 
         if self.sound_timer == 1 {
+            // TODO sound
             eprintln!("BEEP!");
         }
 
@@ -120,8 +115,7 @@ impl Chip8 {
     fn draw_graphics(&self) {
         let mut screen = vec![vec![' '; SCREEN_WIDTH]; SCREEN_HEIGHT];
 
-        self.gpu
-            .screen
+        self.screen
             .iter()
             .enumerate()
             .filter(|(_, p)| **p)
@@ -148,7 +142,7 @@ impl Chip8 {
     /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.1
     fn execute(&mut self, op: OpCode) {
         match op {
-            OpCode::Cls => self.gpu.clear(),
+            OpCode::Cls => self.clear_screen(),
             OpCode::Ret => {
                 self.sp = self.sp.saturating_sub(1);
                 self.pc = self.stack[self.sp];
@@ -309,7 +303,7 @@ impl Chip8 {
                     let x = (x_base + x_line) % SCREEN_WIDTH;
                     let y = (y_base + y_line) % SCREEN_HEIGHT;
 
-                    let current_pixel = &mut self.gpu.screen[x + SCREEN_WIDTH * y];
+                    let current_pixel = &mut self.screen[x + SCREEN_WIDTH * y];
 
                     if *current_pixel {
                         collision = true;
@@ -325,29 +319,17 @@ impl Chip8 {
 
     fn run(&mut self) -> ! {
         loop {
-            self.cycle();
+            for _ in 0..TICKS_PER_FRAME {
+                self.cycle();
+            }
+
             self.draw_graphics();
-            std::thread::sleep_ms(10);
+            std::thread::sleep(std::time::Duration::from_millis(16))
         }
     }
-}
 
-pub const SCREEN_WIDTH: usize = 64;
-pub const SCREEN_HEIGHT: usize = 32;
-
-struct Gpu {
-    screen: [bool; SCREEN_WIDTH * SCREEN_HEIGHT],
-}
-
-impl Gpu {
-    fn clear(&mut self) {
+    fn clear_screen(&mut self) {
         self.screen.fill(false);
-    }
-
-    fn new() -> Self {
-        Self {
-            screen: [false; SCREEN_WIDTH * SCREEN_HEIGHT],
-        }
     }
 }
 
@@ -393,7 +375,6 @@ enum OpCode {
 impl OpCode {
     fn decode(raw_a: u8, raw_b: u8) -> Self {
         let opcode: u16 = (raw_a as u16) << 8 | (raw_b as u16);
-        //eprint!("{:#8x} ", opcode);
 
         match opcode & 0xF000 {
             0x0000 => match opcode & 0x000F {
@@ -492,10 +473,7 @@ impl OpCode {
 }
 
 fn main() {
-    // set up input Bevy? Think about wasm
-    // set up graphics Bevy?
     let mut c8 = Chip8::new();
-    c8.load("./test_opcode.ch8");
-    //c8.load("./br8kout.ch8");
+    c8.load("./br8kout.ch8");
     c8.run();
 }
