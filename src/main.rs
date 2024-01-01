@@ -80,6 +80,8 @@ impl Chip8 {
             rng: rand::thread_rng(),
             keypad: [false; 16],
         };
+
+        // 0x000 to 0x1FF
         c8.mem[..FONTSET.len()].copy_from_slice(&FONTSET); // Copy font into memory.
 
         c8
@@ -226,7 +228,7 @@ impl Chip8 {
                 }
             }
             OpCode::LdI(value) => self.idx = value as _,
-            OpCode::JpV0(_) => todo!(),
+            OpCode::JpV0(addr) => self.pc = addr + self.v[0] as u16,
             OpCode::Rnd(x, value) => self.v[x as usize] = self.rng.gen::<u8>() & value,
             OpCode::Drw(x, vy, n) => self.draw(x, vy, n),
             OpCode::Skp(x) => {
@@ -239,13 +241,25 @@ impl Chip8 {
                     self.pc += 2;
                 }
             }
-
             OpCode::LdVxDt(x) => self.v[x as usize] = self.delay_timer,
-            OpCode::LdVxK => todo!(),
+            OpCode::LdVxK(x) => {
+                for (i, k) in self.keypad.iter().enumerate() {
+                    if *k {
+                        self.v[x as usize] = i as u8;
+                        return;
+                    }
+                }
+
+                self.pc -= 2; // Redo Opcode
+            }
             OpCode::LdDtVx(x) => self.delay_timer = self.v[x as usize],
-            OpCode::LdStVx(_) => todo!(),
+            OpCode::LdStVx(x) => self.sound_timer = self.v[x as usize],
             OpCode::AddIVx(x) => self.idx += self.v[x as usize] as usize,
-            OpCode::LdFVx(_) => todo!(),
+            OpCode::LdFVx(x) => {
+                // Each sprite is stored in 5 bytes, starting from the address 0x000 of ram, so to
+                // get the address of the nth sprite, you multiply by that offset.
+                self.idx = self.v[x as usize] as usize * 5;
+            }
             OpCode::LdBVx(x) => {
                 // BCD, takes the decimal value of Vx, and places the hundreds digit in memory at
                 // location in I, the tens digit at location I+1, and the ones digit at location
@@ -360,13 +374,13 @@ enum OpCode {
     Shl(u8),          // 8xyE - SHL Vx {, Vy}
     SeNeVxVy(u8, u8), // 9xy0 - SNE Vx, Vy
     LdI(u16),         // Annn - LD I, addr
-    JpV0(u8),         // Bnnn - JP V0, addr
+    JpV0(u16),        // Bnnn - JP V0, addr
     Rnd(u8, u8),      // Cxkk - RND Vx, value
     Drw(u8, u8, u8),  // Dxyn - DRW Vx, Vy, nibble
     Skp(u8),          // Ex9E - SKP Vx
     SkNp(u8),         // ExA1 - SKNP Vx
     LdVxDt(u8),       // Fx07 - LD Vx, DT
-    LdVxK,            // Fx0A - LD Vx, K
+    LdVxK(u8),        // Fx0A - LD Vx, K
     LdDtVx(u8),       // Fx15 - LD DT, Vx
     LdStVx(u8),       // Fx18 - LD ST, Vx
     AddIVx(u8),       // Fx1E - ADD I, Vx
@@ -437,7 +451,7 @@ impl OpCode {
                 Self::SeNeVxVy(vx, vy)
             }
             0xA000 => Self::LdI(opcode & 0x0FFF),
-            0xB000 => Self::JpV0((opcode & 0x0FFF) as u8),
+            0xB000 => Self::JpV0(opcode & 0x0FFF),
             0xC000 => {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
                 let value = (opcode & 0x00FF) as u8;
@@ -461,7 +475,7 @@ impl OpCode {
                 let vx = ((opcode & 0x0F00) >> 8) as u8;
                 match opcode & 0x00FF {
                     0x0007 => Self::LdVxDt(vx),
-                    0x000A => Self::LdVxK,
+                    0x000A => Self::LdVxK(vx),
                     0x0015 => Self::LdDtVx(vx),
                     0x0018 => Self::LdStVx(vx),
                     0x001E => Self::AddIVx(vx),
