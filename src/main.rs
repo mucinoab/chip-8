@@ -25,6 +25,7 @@ const FONTSET: [u8; 80] = [
     0xF0, 0x80, 0xF0, 0x80, 0xF0, // E
     0xF0, 0x80, 0xF0, 0x80, 0x80, // F
 ];
+
 struct Chip8 {
     /// Index
     idx: usize,
@@ -92,18 +93,6 @@ impl Chip8 {
         }
     }
 
-    fn run(&mut self) {
-        loop {
-            self.cycle();
-
-            if true {
-                self.draw_graphics();
-            }
-
-            // self.set_keys(); // Capture input
-        }
-    }
-
     fn cycle(&mut self) {
         // Fetch Opcode
         let op_a = self.mem[self.pc as usize];
@@ -113,7 +102,6 @@ impl Chip8 {
         let op = OpCode::decode(op_a, op_b);
         self.pc += 2;
 
-        eprintln!("{:?}, pc: {}", op, self.pc);
         // Execute Opcode
         self.execute(op);
 
@@ -125,25 +113,33 @@ impl Chip8 {
         }
 
         self.sound_timer = self.sound_timer.saturating_sub(1);
-        // std::io::stdin().read_line(&mut String::new());
     }
 
     fn draw_graphics(&self) {
-        let mut screen = String::new();
+        let mut screen = vec![vec![' '; SCREEN_WIDTH]; SCREEN_HEIGHT];
 
-        for x in 0..SCREEN_HEIGHT {
-            for y in 0..SCREEN_WIDTH {
-                let coor = x + y;
-                if self.gpu.screen[coor] {
-                    screen.push('#');
-                } else {
-                    screen.push(' ');
-                }
-            }
-            screen.push('\n');
+        self.gpu
+            .screen
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| **p)
+            .map(|(i, _)| i)
+            .for_each(|i| {
+                let x = i / SCREEN_WIDTH;
+                let y = i % SCREEN_WIDTH;
+
+                screen[x][y] = '0';
+            });
+
+        let mut s = String::with_capacity((SCREEN_HEIGHT * SCREEN_WIDTH) + SCREEN_HEIGHT);
+
+        for row in screen {
+            s.extend(row.iter());
+            s.push('\n');
         }
 
-        // eprintln!("{}", screen);
+        print!("{esc}[2J{esc}[1;1H{s}", esc = 27 as char);
+
         // std::io::stdin().read_line(&mut String::new());
     }
 
@@ -244,9 +240,9 @@ impl Chip8 {
                 }
             }
 
-            OpCode::LdVxDt(_) => todo!(),
+            OpCode::LdVxDt(x) => self.v[x as usize] = self.delay_timer,
             OpCode::LdVxK => todo!(),
-            OpCode::LdDtVx(_) => todo!(),
+            OpCode::LdDtVx(x) => self.delay_timer = self.v[x as usize],
             OpCode::LdStVx(_) => todo!(),
             OpCode::AddIVx(x) => self.idx += self.v[x as usize] as usize,
             OpCode::LdFVx(_) => todo!(),
@@ -262,21 +258,18 @@ impl Chip8 {
                 self.mem[self.idx + 1] = vx % 10;
                 vx /= 10;
 
-                debug_assert!(vx < 10);
                 self.mem[self.idx] = vx;
             }
-
-            OpCode::LdIVx(n) => {
-                let n = n as usize;
-                let registers = &self.v[..n];
-                self.mem[self.idx..self.idx + n].copy_from_slice(registers);
+            OpCode::LdIVx(x) => {
+                let x = x as usize;
+                let registers = &self.v[..=x];
+                self.mem[self.idx..=self.idx + x].copy_from_slice(registers);
             }
             OpCode::LdVxI(n) => {
                 let n = n as usize;
-                let memory = &self.mem[self.idx..self.idx + n];
-                self.v[..n].copy_from_slice(memory);
+                let memory = &self.mem[self.idx..=self.idx + n];
+                self.v[..=n].copy_from_slice(memory);
             }
-            OpCode::Nop => todo!(),
         }
     }
 
@@ -314,6 +307,14 @@ impl Chip8 {
         }
 
         self.v[0xF] = collision as _;
+    }
+
+    fn run(&mut self) -> ! {
+        loop {
+            self.cycle();
+            self.draw_graphics();
+            std::thread::sleep_ms(10);
+        }
     }
 }
 
@@ -373,14 +374,12 @@ enum OpCode {
     LdBVx(u8),        // Fx33 - LD B, Vx
     LdIVx(u8),        // Fx55 - LD [I], Vx
     LdVxI(u8),        // Fx65 - LD Vx, [I]
-    //
-    Nop,
 }
 
 impl OpCode {
     fn decode(raw_a: u8, raw_b: u8) -> Self {
         let opcode: u16 = (raw_a as u16) << 8 | (raw_b as u16);
-        eprint!("{:#8x} ", opcode);
+        //eprint!("{:#8x} ", opcode);
 
         match opcode & 0xF000 {
             0x0000 => match opcode & 0x000F {
@@ -455,10 +454,7 @@ impl OpCode {
                 match opcode & 0x00FF {
                     0x009E => Self::Skp(vx),
                     0x00A1 => Self::SkNp(vx),
-                    _ => {
-                        eprintln!("Invalid Op {:#x} {:#x}", opcode, opcode & 0x00FF);
-                        Self::Nop
-                    }
+                    _ => unreachable!("Invalid Op {:#x} {:#x}", opcode, opcode & 0x00FF),
                 }
             }
             0xF000 => {
@@ -485,7 +481,7 @@ fn main() {
     // set up input Bevy? Think about wasm
     // set up graphics Bevy?
     let mut c8 = Chip8::new();
-    //c8.load("./test_opcode.ch8");
-    c8.load("./br8kout.ch8");
+    c8.load("./test_opcode.ch8");
+    //c8.load("./br8kout.ch8");
     c8.run();
 }
