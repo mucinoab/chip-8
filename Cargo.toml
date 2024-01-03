@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 rand = { version = "*" }
+getrandom = { version = "*", features = ["js"] } # Needed for rand to work in wasm
