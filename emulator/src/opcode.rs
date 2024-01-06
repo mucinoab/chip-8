@@ -1,5 +1,5 @@
 /// http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#3.0
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum OpCode {
     Cls,              // 00E0 - CLS
     Ret,              // 00EE - RET

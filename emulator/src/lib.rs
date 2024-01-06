@@ -1,4 +1,4 @@
-mod opcode;
+pub mod opcode;
 
 use opcode::OpCode;
 
@@ -45,6 +45,8 @@ pub struct Chip8 {
     /// 0x200 - 0xFFF
     mem: [u8; 4096],
 
+    pub last_executed_instruction: OpCode,
+
     /// Monochromatic screen
     pub screen: [bool; SCREEN_WIDTH * SCREEN_HEIGHT],
 
@@ -79,6 +81,7 @@ impl Chip8 {
             sound_timer: 0,
             rng: rand::thread_rng(),
             keypad: [false; 16],
+            last_executed_instruction: OpCode::Cls,
         };
 
         // 0x000 to 0x1FF
@@ -99,16 +102,16 @@ impl Chip8 {
     }
 
     pub fn cycle(&mut self) {
-        // Fetch Opcode
+        // Fetch OpCode
         let op_a = self.mem[self.pc as usize];
         let op_b = self.mem[self.pc as usize + 1];
 
         // Decode Opcode
-        let op = OpCode::decode(op_a, op_b);
+        self.last_executed_instruction = OpCode::decode(op_a, op_b);
         self.pc += 2;
 
         // Execute Opcode
-        self.execute(op);
+        self.execute(self.last_executed_instruction);
 
         // Update timers
         self.delay_timer = self.delay_timer.saturating_sub(1);
