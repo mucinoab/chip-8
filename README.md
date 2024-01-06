@@ -1,6 +1,7 @@
 # Chip 8 Emulator
 
-[Chip 8](https://en.wikipedia.org/wiki/CHIP-8)
+A [Chip 8](https://en.wikipedia.org/wiki/CHIP-8) emulator with a web front end
+using WASM.
 
 [Live Demo](https://mucinoab.github.io/en/proyectos/#chip-8)
 
