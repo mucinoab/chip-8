@@ -51,7 +51,7 @@ function startEmulator() {
 
 async function loadGames() {
   // Source: https://github.com/mattmikolay/chip-8
-  const games = ["wipeoff.ch8", "EKG.ch8", "morse_demo.ch8"];
+  const games = ["wipeoff.ch8", "EKG.ch8", "morse_demo.ch8", "OpCodeTest.ch8"];
 
   for (const game of games) {
     roms[game] = await fetch(game)
