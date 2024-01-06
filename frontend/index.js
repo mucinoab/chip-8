@@ -54,7 +54,7 @@ async function loadGames() {
   const games = ["wipeoff.ch8", "EKG.ch8", "morse_demo.ch8", "OpCodeTest.ch8"];
 
   for (const game of games) {
-    roms[game] = await fetch("/games/" + game)
+    roms[game] = await fetch("games/" + game)
       .then(response => response.arrayBuffer())
       .then(r => new Uint8Array(r))
       .catch(console.error);
