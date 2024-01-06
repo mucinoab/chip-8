@@ -1,4 +1,6 @@
-use chip8::Chip8;
+use chip8::{opcode::OpCode, Chip8};
+
+use std::collections::VecDeque;
 
 use wasm_bindgen::prelude::*;
 use web_sys::{js_sys::Uint8Array, CanvasRenderingContext2d, HtmlCanvasElement, KeyboardEvent};
@@ -7,6 +9,7 @@ use web_sys::{js_sys::Uint8Array, CanvasRenderingContext2d, HtmlCanvasElement, K
 pub struct Emulator {
     chip8: Chip8,
     ctx: CanvasRenderingContext2d,
+    insts: VecDeque<OpCode>,
 }
 
 #[wasm_bindgen]
@@ -26,6 +29,7 @@ impl Emulator {
         Emulator {
             chip8: Chip8::new(),
             ctx,
+            insts: VecDeque::with_capacity(32),
         }
     }
 
@@ -63,5 +67,19 @@ impl Emulator {
                 scale as f64,
             );
         });
+
+        self.insts.push_back(self.chip8.last_executed_instruction);
+
+        if self.insts.len() >= 32 {
+            self.insts.pop_front();
+        }
+
+        // Display the last executed instructions.
+        for (n, i) in self.insts.iter().enumerate() {
+            let op_code = format!("{i:?}");
+            let line_height_position = 15. * n as f64;
+
+            _ = self.ctx.fill_text(&op_code, 10., line_height_position);
+        }
     }
 }
